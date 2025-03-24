@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
-from typing import Union
+from typing import Union, List
 
 import PIL
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
@@ -14,9 +14,9 @@ from pptx.oxml import parse_xml
 from pptx.shapes.base import BaseShape
 from pptx.util import Pt
 
-from pptagent.shapes import Closure, Picture, ShapeElement
-from pptagent.presentation import SlidePage
-from pptagent.utils import runs_merge
+from shapes import Closure, Picture, ShapeElement, Table
+from presentation import SlidePage
+from utils import runs_merge
 
 
 @dataclass
@@ -359,6 +359,21 @@ def clone_paragraph(slide: SlidePage, div_id: int, paragraph_id: int):
     raise IndexError(
         f"Cannot find the paragraph {paragraph_id} of the element {div_id}, may refer to a non-existed paragraph."
     )
+
+def replace_image_with_table(slide: SlidePage, shape_idx: int, table_data: List[List[str]]):
+    old_shape = next((s for s in slide.shapes if s.shape_idx == shape_idx and isinstance(s, Picture)), None)
+    if old_shape is None:
+        raise ValueError(f"Image with shape_idx {shape_idx} not found")
+    slide.shapes.remove(old_shape)
+    if not table_data or not all(isinstance(row, list) for row in table_data):
+        raise ValueError("Invalid table data")
+    rows, cols = len(table_data), len(table_data[0])
+    if rows == 0 or not all(len(row) == cols for row in table_data):
+        raise ValueError("Table data is empty or rows have inconsistent lengths")
+    new_table = Table(slide_idx=slide.slide_idx, shape_idx=shape_idx, style={"shape_bounds": old_shape.style["shape_bounds"].copy()}, data=table_data, 
+                    text_frame=None, slide_area=old_shape.slide_area, level=0)
+    slide.shapes.append(new_table)
+    return new_table
 
 
 class API_TYPES(Enum):

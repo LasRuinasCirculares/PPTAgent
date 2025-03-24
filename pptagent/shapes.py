@@ -20,7 +20,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.dml import MSO_FILL_TYPE
 from pptx.dml.fill import FillFormat
 from pptx.dml.line import LineFormat
-from pptagent.utils import (
+from utils import (
     IMAGE_EXTENSIONS,
     Config,
     dict_to_object,
@@ -126,37 +126,6 @@ class Fill:
         Convert the fill to HTML.
         """
         pass
-
-
-class Line:
-    """
-    A class to represent a line.
-    """
-
-    def __init__(self, fill: Fill, line_width: float, line_dash_style: str):
-        self.fill = fill
-        self.line_width = line_width
-        self.line_dash_style = line_dash_style
-
-    @classmethod
-    def from_shape(cls, line: Optional[LineFormat], part: SlidePart, config: Config):
-        line_fill = getattr(line, "fill", None)
-        if line_fill is None:
-            return cls(Fill(MSO_FILL_TYPE.BACKGROUND, "", None), 0, "")
-        fill = Fill.from_shape(line_fill, part, config)
-        line_width = line.width
-        line_dash_style = line.dash_style
-        return cls(fill, line_width, line_dash_style)
-
-    def build(self, line: LineFormat, part: SlidePart) -> None:
-        """
-        Build the line in a shape.
-        """
-        if self.fill.fill_type == MSO_FILL_TYPE.BACKGROUND:
-            return
-        self.fill.build(line.fill, part)
-        line.width = self.line_width
-        line.dash_style = self.line_dash_style
 
 
 class Background(Fill):
@@ -846,6 +815,7 @@ class Picture(ShapeElement):
         dict_to_object(self.style["shape_bounds"], shape)
         if hasattr(shape, "rotation"):
             shape.rotation = self.style["rotation"]
+        print(slide.shapes)
 
         return shape
 
@@ -1198,8 +1168,130 @@ class SemanticPicture(ShapeElement):
         obj.semantic_name = shape_type
         return obj
 
+class Table(ShapeElement):
+    @classmethod
+    def from_shape(
+        cls,
+        slide_idx: int,
+        shape_idx: int,
+        shape: BaseShape,
+        style: Dict,
+        text_frame: TextFrame,
+        config: Config,
+        slide_area: float,
+        level: int,
+    ) -> "Table":
+        """
+        从 PowerPoint 形状创建一个 Table 实例
+        """
+        table = shape.table
+        data = []
+        for row in table.rows:
+            row_data = []
+            for cell in row.cells:
+                row_data.append(cell.text)
+            data.append(row_data)
 
-# Define shape type mapping
+        return cls(slide_idx, shape_idx, style, data, text_frame, slide_area, level)
+
+    def build(self, slide) -> PPTXTable:
+        """
+        在指定的 Slide 上创建 PPTXTable。
+
+        Args:
+            slide: 目标 PPTX 幻灯片。
+
+        Returns:
+            pptx.table.Table: 创建的 PPTXTable 对象。
+        """
+        rows = len(self.data)
+        if rows == 0:
+            raise ValueError("Table data is empty")
+        cols = len(self.data[0])
+
+        # 位置和尺寸
+        left = self.left
+        top = self.top
+        width = self.width
+        height = self.height
+
+        # 创建 table shape
+        table_shape = slide.shapes.add_table(rows, cols, left, top, width, height)
+        table = table_shape.table  # 这里获取的是真正的 pptx.table.Table
+
+        # 填充数据
+        for i in range(rows):
+            for j in range(cols):
+                table.cell(i, j).text = self.data[i][j]
+
+        # 记录 table
+        self.shape = table_shape
+        self.pptx_table = table  # 保存 pptx.table.Table
+
+        return table  # 确保返回 pptx.table.Table，而不是 shape
+
+    def to_html(self, style_args: StyleArg) -> str:
+        if not style_args.show_content:
+            return ""
+        html = f"{self.indent}<table{self.get_inline_style(style_args)}>\n"
+        for row in self.data:
+            html += f"{self.indent}\t<tr>\n"
+            for cell in row:
+                html += f"{self.indent}\t\t<td>{cell}</td>\n"
+            html += f"{self.indent}\t</tr>\n"
+        html += f"{self.indent}</table>\n"
+        return html
+
+    @property
+    def table_data(self) -> List[List[str]]:
+        """
+        获取表格数据
+        
+        Returns:
+            List[List[str]]: 二维表格数据
+        """
+        return self.data[0]
+
+    @table_data.setter
+    def table_data(self, value: List[List[str]]) -> None:
+        """
+        设置表格数据
+        
+        Args:
+            value (List[List[str]]): 新的表格数据
+        """
+        self.data[0] = value
+
+class Line:
+    """
+    A class to represent a line.
+    """
+
+    def __init__(self, fill: Fill, line_width: float, line_dash_style: str):
+        self.fill = fill
+        self.line_width = line_width
+        self.line_dash_style = line_dash_style
+
+    @classmethod
+    def from_shape(cls, line: Optional[LineFormat], part: SlidePart, config: Config):
+        line_fill = getattr(line, "fill", None)
+        if line_fill is None:
+            return cls(Fill(MSO_FILL_TYPE.BACKGROUND, "", None), 0, "")
+        fill = Fill.from_shape(line_fill, part, config)
+        line_width = line.width
+        line_dash_style = line.dash_style
+        return cls(fill, line_width, line_dash_style)
+
+    def build(self, line: LineFormat, part: SlidePart) -> None:
+        """
+        Build the line in a shape.
+        """
+        if self.fill.fill_type == MSO_FILL_TYPE.BACKGROUND:
+            return
+        self.fill.build(line.fill, part)
+        line.width = self.line_width
+        line.dash_style = self.line_dash_style
+
 SHAPECAST = {
     MSO_SHAPE_TYPE.AUTO_SHAPE: FreeShape,
     MSO_SHAPE_TYPE.LINE: FreeShape,
@@ -1210,7 +1302,7 @@ SHAPECAST = {
     MSO_SHAPE_TYPE.GROUP: GroupShape,
     MSO_SHAPE_TYPE.TEXT_BOX: TextBox,
     MSO_SHAPE_TYPE.MEDIA: SemanticPicture,
-    MSO_SHAPE_TYPE.TABLE: SemanticPicture,
+    MSO_SHAPE_TYPE.TABLE: Table,
     MSO_SHAPE_TYPE.CHART: SemanticPicture,
     MSO_SHAPE_TYPE.EMBEDDED_OLE_OBJECT: SemanticPicture,
     MSO_SHAPE_TYPE.LINKED_OLE_OBJECT: SemanticPicture,
