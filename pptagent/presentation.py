@@ -8,8 +8,8 @@ from pptx.slide import Slide as PPTXSlide
 from pptx.shapes.base import BaseShape
 from pptx.shapes.group import GroupShape as PPTXGroupShape
 
-from pptagent.utils import Config, get_logger
-from pptagent.shapes import (
+from utils import Config, get_logger
+from shapes import (
     T,
     GroupShape,
     Picture,
@@ -159,7 +159,6 @@ class SlidePage:
                     closure.apply(build_shape)
                 except Exception as e:
                     raise ValueError(f"Failed to apply closures to slides: {e}")
-
         return slide
 
     def shape_filter(
@@ -380,6 +379,7 @@ class Presentation:
             layout_only (bool): Whether to save only the layout.
         """
         self.clear_slides()
+        print(self.prs.slide_width, self.prs.slide_height)
         for slide in self.slides:
             if layout_only:
                 self.clear_images(slide.shapes)
