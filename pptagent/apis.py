@@ -467,7 +467,7 @@ def replace_image_with_table(slide, shape_idx, table_data):
         raise SlideEditError("Table data is empty or rows have inconsistent lengths")
     
     shape._closures['replace'].append(
-        Closure(partial(fill_data, table_data), table_data)
+        Closure(partial(fill_data, table_data))
         )
     shape.col = cols
     shape.row = rows
@@ -486,7 +486,7 @@ def merge_cells(slide, shape_idx, merge_cells):
     merge_area = [min_row, min_col, max_row, max_col]
     
     shape._closures['merge'].append(
-        Closure(partial(merge_cell, merge_area), merge_area)
+        Closure(partial(merge_cell, merge_area))
     )
     
     return 
