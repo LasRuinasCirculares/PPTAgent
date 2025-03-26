@@ -458,7 +458,6 @@ def clone_paragraph(slide: SlidePage, div_id: int, paragraph_id: int):
 def replace_image_with_table(slide, shape_idx, table_data):
     shape = element_index(slide, shape_idx)
     assert isinstance(shape, Picture), "The element is not a Picture."
-    print(shape)
     
     if not table_data or not all(isinstance(row, list) for row in table_data):
         raise SlideEditError("Invalid table data")
